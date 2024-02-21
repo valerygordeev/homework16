@@ -1,0 +1,155 @@
+---
+- hosts: all # part running on all hosts
+  become: true
+  tasks:
+  - name: Set zonetime #устанавливаем часовой пояс Москвы
+    ansible.builtin.shell: ln -sf /usr/share/zoneinfo/Europe/Moscow /etc/localtime
+    
+  - name: Synchonize time # синхронизируем дату и время
+    service:
+      name: chronyd
+      state: restarted
+      #enabled: yes
+
+- hosts: web # client provision
+  become: true
+  tasks:
+  - name: Install repository # установим репозиторий
+    yum:
+      name: epel-release
+      state: present
+
+  - name: Install nginx & audispd-plugins # установим web сервер nginx и плагин 
+    yum:
+      name: "{{ packages }}"
+      state: present
+    vars:
+      packages:
+      - nginx
+      - audispd-plugins  
+
+  - name: copy nginx.conf to the web
+    copy:
+      src: files/web/nginx.conf
+      dest: /etc/nginx/nginx.conf
+      owner: root
+      group: root
+      mode: 0644
+
+  - name: copy auditd.conf to the web
+    copy:
+      src: files/web/auditd.conf
+      dest: /etc/audit/auditd.conf
+      owner: root
+      group: root
+      mode: 0644
+            
+  - name: copy au-remote.conf to the web
+    copy:
+      src: files/web/au-remote.conf
+      dest: /etc/audisp/plugins.d/au-remote.conf
+      owner: root
+      group: root
+      mode: 0644
+      
+  - name: copy audisp-remote.conf to the web
+    copy:
+      src: files/web/audisp-remote.conf
+      dest: /etc/audisp/audisp-remote.conf
+      owner: root
+      group: root
+      mode: 0644
+
+  - name: copy audit.rules to the web
+    copy:
+      src: files/web/audit.rules
+      dest: /etc/audit/rules.d/audit.rules
+      owner: root
+      group: root
+      mode: 0644   
+
+  - name: copy web_script.sh to the web
+    copy:
+      src: files/web/web_script.sh
+      dest: ~/web_script.sh
+      owner: root
+      group: root
+      mode: 0755 
+      
+  - name: Start auditd # перезапускаем систему аудита
+    service:
+      name: auditd.service
+      state: restarted
+      use: service    
+
+  - name: Start nginx # запускаем сервер nginx
+    service:
+      name: nginx
+      state: restarted
+      enabled: yes     
+
+  - name: Start auditd through shell #перезапускаем систему аудита
+    ansible.builtin.shell: service auditd restart      
+  - name: Start nginx through shell #перезапускаем систему аудита
+    ansible.builtin.shell: systemctl restart nginx
+    
+  - name: Run script for web #запуск скрипта для web
+    ansible.builtin.shell: sh ~/web_script.sh
+    register: displayfile
+    
+  - debug:
+      msg: "{{ displayfile.stdout_lines }}"          
+          
+- hosts: log # сервер принимающий логи
+  become: true
+  tasks:
+  - name: Install rsyslog in log # проверим наличие rsyslog
+    yum:
+      name: rsyslog
+      state: present
+      
+  - name: copy rsyslog.conf
+    copy:
+      src: files/log/rsyslog.conf
+      dest: /etc/rsyslog.conf
+      owner: root
+      group: root
+      mode: 0644
+      
+  - name: copy auditd.conf to the log
+    copy:
+      src: files/log/auditd.conf
+      dest: /etc/audit/auditd.conf
+      owner: root
+      group: root
+      mode: 0644      
+
+  - name: copy log_script.sh to the log
+    copy:
+      src: files/log/log_script.sh
+      dest: ~/log_script.sh
+      owner: root
+      group: root
+      mode: 0755 
+          
+  - name: Restart service rsyslog # Перезапускаем службу rsyslog
+    ansible.builtin.service:
+      name: rsyslog
+      state: restarted
+
+  - name: Start auditd # перезапускаем систему аудита
+    service:
+      name: auditd.service
+      state: restarted
+      use: service    
+
+  - name: Start auditd through shell #перезапускаем систему аудита
+    ansible.builtin.shell: service auditd restart
+            
+  - name: Run script for log #запуск скрипта для log
+    ansible.builtin.shell: sh ~/log_script.sh
+    register: displayfile
+    
+  - debug:
+      msg: "{{ displayfile.stdout_lines }}"
+      

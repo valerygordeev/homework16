@@ -1,0 +1,1 @@
+{"dependencies":[["vagrant-timezone",["= 1.3.0"]]],"checksum":"86d794bd377621cb6541ab3eeb78ad546f0675ad3f8bbb238ec764d3f3512b7d","vagrant_version":"2.4.1"}
